@@ -39,7 +39,7 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
     private static final String CHANGED = "changed";
     private static final String SOMETHING = "something";
     private static final String INIT_FROM = "initFrom";
-    private static final String TO = "to";
+    private static final String TO_ENTITY = "toEntity";
 
     private Messager messager;
     private boolean firstRound = true;
@@ -49,10 +49,14 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
         this.messager = processingEnv.getMessager();
     }
 
+    //TODO imports vs FQNs
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         if (firstRound) {
             //TODO clean up - for the most part copied+adapted from BuilderGen
+            //TODO replace EVERYWHERE: decapitalize(XY) by a reasonable name (usually paramName derived from className)
 
+            //-----------------PREPARE-----------------
+            //TODO optimize the preparation phase?
 
             //hack: first pass through them and get all FQ class names
             //TODO find a better way to see if the parent class is annotated?
@@ -60,7 +64,7 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
                     .stream().map(el -> ((TypeElement) el).getQualifiedName().toString()).collect(Collectors.toSet());
 
             //hack to save the FQN for nested classes (later when getting types from Roaster, the enclosing class is not included in it)
-            Map<String, String> nestedClassesFullTypeToRoasterType = new HashMap<>();
+            Map<String, String> nestedClassesFullTypeToRoasterType = new HashMap<>(); //TODO use this or what?
             for (Element el : roundEnv.getElementsAnnotatedWith(GenerateChangeObject.class)) {
                 for (Element enclosed : el.getEnclosedElements()) {
                     if ((enclosed.getKind() == ElementKind.ENUM) || (enclosed.getKind() == ElementKind.CLASS) ||
@@ -77,20 +81,43 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
                 }
             }
 
+            //find top annotated superclass for each class
+            Map<String, String> oneStepUp = new HashMap<>();
+            for (Element el : roundEnv.getElementsAnnotatedWith(GenerateChangeObject.class))  {
+                String thisClass = ((TypeElement) el).getQualifiedName().toString();
+                String parentClass = ((TypeElement) el).getSuperclass().toString();
 
+                if (! annotatedClasses.contains(parentClass)) {
+                    parentClass = null;
+                }
+
+                oneStepUp.put(thisClass, parentClass);
+            }
+
+            Map<String, String> topAnnotatedSuperClass = new HashMap<>();
+            for (String thisClass : oneStepUp.keySet()) {
+                String topAnnSuperClass = thisClass;
+                while (oneStepUp.get(topAnnSuperClass) != null) {
+                    topAnnSuperClass = oneStepUp.get(topAnnSuperClass);
+                }
+
+                topAnnotatedSuperClass.put(thisClass, topAnnSuperClass);
+            }
+
+            //-----------------------------------------
 
 
             for (Element c : roundEnv.getElementsAnnotatedWith(GenerateChangeObject.class)) {
                 if (c.getEnclosingElement().getKind() != ElementKind.PACKAGE) {
                     //this is not a top-level class but rather a nested class/enum, local or anonymous class; ignore for simplicity
-                    messager.printMessage(Diagnostic.Kind.MANDATORY_WARNING, "BuilderGenerator: Ignoring nested class/enum '" +
+                    messager.printMessage(Diagnostic.Kind.MANDATORY_WARNING, "ChangeObjectGenerator: Ignoring nested class/enum '" +
                             ((TypeElement) c).getQualifiedName() + "'");
                     continue;
                 }
 
                 if (c.getKind() == ElementKind.ENUM) {
                     //ignore enums as well
-                    messager.printMessage(Diagnostic.Kind.MANDATORY_WARNING, "BuilderGenerator: Ignoring enum '" +
+                    messager.printMessage(Diagnostic.Kind.MANDATORY_WARNING, "ChangeObjectGenerator: Ignoring enum '" +
                             ((TypeElement) c).getQualifiedName() + "'");
                     continue;
                 }
@@ -114,7 +141,7 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
 
 
                     //check if the parent of this class is also annotated with this annotation, i.e. will also get a generated
-                    //  changeobject. if so, add the extension clause to the builder
+                    //  changeobject. if so, add the extension clause
                     String parentClass = classs.getSuperclass().toString();
                     if (annotatedClasses.contains(parentClass)) {
                         String parentClassSimpleName = (parentClass.contains(".")) ?
@@ -131,20 +158,19 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
 
                     StringBuilder fromEntity = new StringBuilder();
                     StringBuilder fromChangeObject = new StringBuilder();
+                    String topAnnClass = topAnnotatedSuperClass.get(classs.getQualifiedName().toString());
+                    topAnnClass = topAnnClass.substring(topAnnClass.lastIndexOf('.') + 1);
                     StringBuilder toEntity = new StringBuilder();
-                    toEntity.append(classs.getSimpleName().toString()).append(" ").append(decapitalize(classs.getSimpleName().toString()))
-                            .append(" = ").append(_new(classs.getSimpleName().toString())).append(END_COMMAND);
-
                     for (FieldSource<JavaClassSource> attribute : javaClass.getFields()) {
                         //ignore static and final fields //TODO or should we?
                         if (attribute.isStatic()) {
-                            messager.printMessage(Diagnostic.Kind.MANDATORY_WARNING, "BuilderGenerator: Ignoring static attribute '" +
+                            messager.printMessage(Diagnostic.Kind.MANDATORY_WARNING, "ChangeObjectGenerator: Ignoring static attribute '" +
                                     attribute.getName() + "'");
                             continue;
                         }
 
                         if (attribute.isFinal()) {
-                            messager.printMessage(Diagnostic.Kind.MANDATORY_WARNING, "BuilderGenerator: Ignoring final attribute '" +
+                            messager.printMessage(Diagnostic.Kind.MANDATORY_WARNING, "ChangeObjectGenerator: Ignoring final attribute '" +
                                     attribute.getName() + "'");
                             continue;
                         }
@@ -155,6 +181,7 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
                                 .setType(ValueWrapper.class.getCanonicalName() + "<" + getObjectTypeFQN(attribute.getType()) + ">")
                                 .setName(attribute.getName())
                                 .setLiteralInitializer(_new(ValueWrapper.class.getSimpleName() + DIAMOND));
+                        generatedJavaClass.addImport(attribute.getType());
 
                         //methods
                         generatedJavaClass.addMethod()
@@ -189,8 +216,8 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
                                         decapitalize(classs.getSimpleName().toString()) + "." + _get(attribute.getName())))
                                 .append(END_COMMAND);
 
-                        toEntity.append(decapitalize(classs.getSimpleName().toString())).append(".")
-                                .append(_set(attribute.getName(), _get(attribute)));
+                        toEntity.append(decapitalize(annotatedClasses.contains(parentClass) ? classs.getSimpleName().toString() : topAnnClass))
+                                .append(".").append(_set(attribute.getName(), _get(attribute)));
                     }
 
                     //isSomethingChanged
@@ -199,8 +226,13 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
                             .setReturnType(BOOL)
                             .setName(isXChanged(SOMETHING))
                             .setBody(_return(isSomethingChanged.stream().collect(Collectors.joining(" || "))));
+                    //if this is a subclass
+                    if (annotatedClasses.contains(parentClass)) {
+                        generatedJavaClass.getMethod(isXChanged(SOMETHING))
+                                .addAnnotation(Override.class);
+                    }
 
-                    //fromChangeObject
+                    //initFromChangeObject
                     generatedJavaClass.addMethod()
                             .setPublic()
                             .setReturnTypeVoid()
@@ -208,7 +240,7 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
                             .setBody(fromChangeObject.toString())
                             .addParameter(generatedJavaClass.getName(), decapitalize(generatedJavaClass.getName()));
 
-                    //fromEntity
+                    //initFromEntity
                     generatedJavaClass.addMethod()
                             .setPublic()
                             .setReturnTypeVoid()
@@ -217,12 +249,30 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
                             .addParameter(classs.getSimpleName().toString(), decapitalize(classs.getSimpleName().toString()));
 
                     //toEntity
-                    toEntity.append(_return(decapitalize(classs.getSimpleName().toString())));
+                    String toEntityBody;
+                    //if this is a subclass
+                    if (annotatedClasses.contains(parentClass)) {
+                        toEntityBody =_super() + "." + TO_ENTITY + "(" + decapitalize(topAnnClass) + ")" + END_COMMAND;
+                        toEntityBody += _if(_instanceof(decapitalize(topAnnClass), classs.getSimpleName().toString()),
+                                classs.getSimpleName().toString() + " " + decapitalize(classs.getSimpleName().toString()) + " = " +
+                                        _cast(decapitalize(topAnnClass), classs.getSimpleName().toString()) + END_COMMAND +
+                                toEntity.toString());
+                    } else {
+                        toEntityBody = toEntity.toString();
+                    }
+
                     generatedJavaClass.addMethod()
                             .setPublic()
-                            .setReturnType(classs.getSimpleName().toString())
-                            .setName(TO + classs.getSimpleName())
-                            .setBody(toEntity.toString());
+                            .setReturnTypeVoid()
+                            .setName(TO_ENTITY)
+                            .setBody(toEntityBody)
+                            .addParameter(topAnnotatedSuperClass.get(classs.getQualifiedName().toString()),
+                                    decapitalize(topAnnClass));
+                    //if this is a subclass
+                    if (annotatedClasses.contains(parentClass)) {
+                        generatedJavaClass.getMethod(TO_ENTITY, topAnnotatedSuperClass.get(classs.getQualifiedName().toString()))
+                                .addAnnotation(Override.class);
+                    }
 
                     //add the JavaDoc
                     JavaDocSource changeObjectJavadoc = generatedJavaClass.getJavaDoc();
