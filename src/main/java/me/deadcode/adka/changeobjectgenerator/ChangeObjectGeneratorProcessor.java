@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 
 import static me.deadcode.adka.changeobjectgenerator.JavaElements.*;
 
-@SupportedAnnotationTypes("me.deadcode.adka.entitychangegen.annotation.GenerateChangeObject")
+@SupportedAnnotationTypes("me.deadcode.adka.changeobjectgenerator.annotation.GenerateChangeObject")
 @SupportedSourceVersion(SourceVersion.RELEASE_8)
 public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
 
