@@ -14,10 +14,7 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.TypeElement;
 import javax.tools.Diagnostic;
 import java.io.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static me.deadcode.adka.changeobjectgenerator.JavaElements.*;
@@ -57,6 +54,32 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
             //TODO clean up - for the most part copied+adapted from BuilderGen
 
 
+            //hack: first pass through them and get all FQ class names
+            //TODO find a better way to see if the parent class is annotated?
+            Set<String> annotatedClasses = roundEnv.getElementsAnnotatedWith(GenerateChangeObject.class)
+                    .stream().map(el -> ((TypeElement) el).getQualifiedName().toString()).collect(Collectors.toSet());
+
+            //hack to save the FQN for nested classes (later when getting types from Roaster, the enclosing class is not included in it)
+            Map<String, String> nestedClassesFullTypeToRoasterType = new HashMap<>();
+            for (Element el : roundEnv.getElementsAnnotatedWith(GenerateChangeObject.class)) {
+                for (Element enclosed : el.getEnclosedElements()) {
+                    if ((enclosed.getKind() == ElementKind.ENUM) || (enclosed.getKind() == ElementKind.CLASS) ||
+                            (enclosed.getKind() == ElementKind.ANNOTATION_TYPE) || (enclosed.getKind() == ElementKind.INTERFACE)) {
+
+                        String fullName = ((TypeElement) enclosed).getQualifiedName().toString();
+
+                        String beginning = fullName.substring(0, fullName.lastIndexOf('.'));
+                        String nameAsReturnedByRoaster = beginning.substring(0, beginning.lastIndexOf('.') + 1) +
+                                fullName.substring(fullName.lastIndexOf('.') + 1);
+
+                        nestedClassesFullTypeToRoasterType.put(nameAsReturnedByRoaster, fullName);
+                    }
+                }
+            }
+
+
+
+
             for (Element c : roundEnv.getElementsAnnotatedWith(GenerateChangeObject.class)) {
                 if (c.getEnclosingElement().getKind() != ElementKind.PACKAGE) {
                     //this is not a top-level class but rather a nested class/enum, local or anonymous class; ignore for simplicity
@@ -89,12 +112,29 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
                             .setName(classs.getSimpleName().toString() + CHANGE_OBJECT);
 
 
+
+                    //check if the parent of this class is also annotated with this annotation, i.e. will also get a generated
+                    //  changeobject. if so, add the extension clause to the builder
+                    String parentClass = classs.getSuperclass().toString();
+                    if (annotatedClasses.contains(parentClass)) {
+                        String parentClassSimpleName = (parentClass.contains(".")) ?
+                                parentClass.substring(parentClass.lastIndexOf(".") + 1) : parentClass;
+                        generatedJavaClass.setSuperType(parentClassSimpleName + CHANGE_OBJECT);
+                    }
+
+
+
                     List<String> isSomethingChanged = new ArrayList<>();
+                    if (annotatedClasses.contains(parentClass)) {
+                        isSomethingChanged.add(_super() + "." + isXChanged(SOMETHING) + "()");
+                    }
+
                     StringBuilder fromEntity = new StringBuilder();
                     StringBuilder fromChangeObject = new StringBuilder();
                     StringBuilder toEntity = new StringBuilder();
                     toEntity.append(classs.getSimpleName().toString()).append(" ").append(decapitalize(classs.getSimpleName().toString()))
                             .append(" = ").append(_new(classs.getSimpleName().toString())).append(END_COMMAND);
+
                     for (FieldSource<JavaClassSource> attribute : javaClass.getFields()) {
                         //ignore static and final fields //TODO or should we?
                         if (attribute.isStatic()) {
