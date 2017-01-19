@@ -1,6 +1,6 @@
-package me.deadcode.adka.entitychangegen;
+package me.deadcode.adka.changeobjectgenerator;
 
-import me.deadcode.adka.entitychangegen.annotation.GenerateChangeObject;
+import me.deadcode.adka.changeobjectgenerator.annotation.GenerateChangeObject;
 import org.jboss.forge.roaster.Roaster;
 import org.jboss.forge.roaster.model.Type;
 import org.jboss.forge.roaster.model.source.FieldSource;
@@ -20,7 +20,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static me.deadcode.adka.entitychangegen.JavaElements.*;
+import static me.deadcode.adka.changeobjectgenerator.JavaElements.*;
 
 @SupportedAnnotationTypes("me.deadcode.adka.entitychangegen.annotation.GenerateChangeObject")
 @SupportedSourceVersion(SourceVersion.RELEASE_8)

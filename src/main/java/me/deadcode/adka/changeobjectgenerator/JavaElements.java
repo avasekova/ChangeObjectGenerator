@@ -1,4 +1,4 @@
-package me.deadcode.adka.entitychangegen;
+package me.deadcode.adka.changeobjectgenerator;
 
 import org.jboss.forge.roaster.model.source.FieldSource;
 import org.jboss.forge.roaster.model.source.JavaClassSource;

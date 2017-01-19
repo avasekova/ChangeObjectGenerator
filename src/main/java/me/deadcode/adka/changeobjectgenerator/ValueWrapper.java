@@ -1,4 +1,4 @@
-package me.deadcode.adka.entitychangegen;
+package me.deadcode.adka.changeobjectgenerator;
 
 public class ValueWrapper<T> {
 
@@ -22,5 +22,13 @@ public class ValueWrapper<T> {
 
     public boolean isChanged() {
         return changed;
+    }
+
+    @Override
+    public String toString() {
+        return "{" +
+                "value=" + value +
+                ", changed=" + changed +
+                '}';
     }
 }
