@@ -156,8 +156,19 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
                         isSomethingChanged.add(_super() + "." + isXChanged(SOMETHING) + "()");
                     }
 
-                    StringBuilder fromEntity = new StringBuilder();
-                    StringBuilder fromChangeObject = new StringBuilder();
+                    //TODO clean everything up, introduce local vars, methods, etc., this is very hard to read
+                    StringBuilder initFromEntity = new StringBuilder();
+                    StringBuilder initFromChangeObject = new StringBuilder();
+                    if (annotatedClasses.contains(parentClass)) {
+                        initFromEntity.append(_super()).append(".").append(INIT_FROM)
+                                .append(simpleFromFQN(oneStepUp.get(classs.getQualifiedName().toString())))
+                                .append("(").append(decapitalize(classs.getSimpleName().toString()))
+                                .append(")").append(END_COMMAND);
+                        initFromChangeObject.append(_super()).append(".").append(INIT_FROM)
+                                .append(simpleFromFQN(oneStepUp.get(classs.getQualifiedName().toString())))
+                                .append(CHANGE_OBJECT).append("(").append(decapitalize(classs.getSimpleName().toString())).append(CHANGE_OBJECT)
+                                .append(")").append(END_COMMAND);
+                    }
                     String topAnnClass = topAnnotatedSuperClass.get(classs.getQualifiedName().toString());
                     topAnnClass = topAnnClass.substring(topAnnClass.lastIndexOf('.') + 1);
                     StringBuilder toEntity = new StringBuilder();
@@ -206,12 +217,12 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
 
                         isSomethingChanged.add(isChanged);
 
-                        fromChangeObject.append(_this()).append(".").append(attribute.getName()).append(" = ")
+                        initFromChangeObject.append(_this()).append(".").append(attribute.getName()).append(" = ")
                                 .append(_new(ValueWrapper.class.getSimpleName() + DIAMOND,
                                         decapitalize(generatedJavaClass.getName()) + "." + _get(attribute.getName())))
                                 .append(END_COMMAND);
 
-                        fromEntity.append(_this()).append(".").append(attribute.getName()).append(" = ")
+                        initFromEntity.append(_this()).append(".").append(attribute.getName()).append(" = ")
                                 .append(_new(ValueWrapper.class.getSimpleName() + DIAMOND,
                                         decapitalize(classs.getSimpleName().toString()) + "." + _get(attribute.getName())))
                                 .append(END_COMMAND);
@@ -237,7 +248,7 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
                             .setPublic()
                             .setReturnTypeVoid()
                             .setName(INIT_FROM + generatedJavaClass.getName())
-                            .setBody(fromChangeObject.toString())
+                            .setBody(initFromChangeObject.toString())
                             .addParameter(generatedJavaClass.getName(), decapitalize(generatedJavaClass.getName()));
 
                     //initFromEntity
@@ -245,7 +256,7 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
                             .setPublic()
                             .setReturnTypeVoid()
                             .setName(INIT_FROM + classs.getSimpleName())
-                            .setBody(fromEntity.toString())
+                            .setBody(initFromEntity.toString())
                             .addParameter(classs.getSimpleName().toString(), decapitalize(classs.getSimpleName().toString()));
 
                     //toEntity
@@ -331,6 +342,14 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
 
     private String decapitalize(String className) {
         return className.substring(0,1).toLowerCase() + (className.length() == 1 ? "" : className.substring(1));
+    }
+
+    private String paramFromFQNClass(String fqnClassName) {
+        return decapitalize(simpleFromFQN(fqnClassName));
+    }
+
+    private String simpleFromFQN(String fqClassName) {
+        return fqClassName.substring(fqClassName.lastIndexOf('.') + 1);
     }
 
     private String isXChanged(String x) {
