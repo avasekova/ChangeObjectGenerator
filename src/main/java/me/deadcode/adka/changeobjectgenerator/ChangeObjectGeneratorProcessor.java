@@ -38,7 +38,7 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
     private static final String IS_X_CHANGED = "is%sChanged";
     private static final String CHANGED = "changed";
     private static final String SOMETHING = "something";
-    private static final String FROM = "from";
+    private static final String INIT_FROM = "initFrom";
     private static final String TO = "to";
 
     private Messager messager;
@@ -204,7 +204,7 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
                     generatedJavaClass.addMethod()
                             .setPublic()
                             .setReturnTypeVoid()
-                            .setName(FROM + generatedJavaClass.getName())
+                            .setName(INIT_FROM + generatedJavaClass.getName())
                             .setBody(fromChangeObject.toString())
                             .addParameter(generatedJavaClass.getName(), decapitalize(generatedJavaClass.getName()));
 
@@ -212,7 +212,7 @@ public class ChangeObjectGeneratorProcessor extends AbstractProcessor {
                     generatedJavaClass.addMethod()
                             .setPublic()
                             .setReturnTypeVoid()
-                            .setName(FROM + classs.getSimpleName())
+                            .setName(INIT_FROM + classs.getSimpleName())
                             .setBody(fromEntity.toString())
                             .addParameter(classs.getSimpleName().toString(), decapitalize(classs.getSimpleName().toString()));
 
